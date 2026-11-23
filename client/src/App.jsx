@@ -1,92 +1,126 @@
-import { useState } from 'react';
+
+import { useState, useEffect } from 'react';
 import './App.css';
+
+const API_URL = 'https://experiment-12-mern-notes-app.onrender.com/notes';
+
 function App() {
-// 1. STATE (React's Memory)
-// 'notes' holds our list of notes. 'setNotes' is the function we use to update that list.
-const [notes, setNotes] = useState([]);
-// These hold what the user is currently typing in the input boxes.
-const [title, setTitle] = useState('');
-const [content, setContent] = useState('');
-// If we are editing an existing note, we save its ID here. Otherwise, it stays 'null'.
-const [editId, setEditId] = useState(null);
-// 2. THE 'CREATE' AND 'UPDATE' LOGIC
-// This runs when you click the "Save" or "Add" button
-const handleSubmit = (e) => {
-e.preventDefault(); // Stops the page from reloading (SPA behavior!)
-if (title === '' || content === '') return; // Don't save empty notes
-if (editId !== null) {
-// UPDATE: Find the note with the matching ID and change its text
-setNotes(
-notes.map((note) =>
-note.id === editId ? { ...note, title: title, content: content } : note
-)
-);
-setEditId(null); // Clear the editing memory
-} else {
-// CREATE: Make a brand new note object and add it to our list
-const newNote = {
-id: Date.now(), // Use the current time to generate a unique ID
+  const [notes, setNotes] = useState([]);
+  const [title, setTitle] = useState('');
+  const [content, setContent] = useState('');
+  const [editId, setEditId] = useState(null);
 
-title: title,
-content: content,
-};
-setNotes([...notes, newNote]);
-}
-// Clear the typing boxes after saving
-setTitle('');
-setContent('');
-};
-// 3. THE 'DELETE' LOGIC
-// Filters out the note we want to delete, keeping only the rest
-const handleDelete = (idToRemove) => {
-setNotes(notes.filter((note) => note.id !== idToRemove));
-};
-// 4. PREPARE TO EDIT
-// Puts the selected note's text back into the typing boxes
-const handleEdit = (note) => {
-setEditId(note.id);
-setTitle(note.title);
-setContent(note.content);
-};
-// 5. WHAT THE USER SEES (HTML-like syntax called JSX)
-return (
-<div className="container">
-<h1>My Notes App</h1>
-{/* The Form for typing notes */}
-<form onSubmit={handleSubmit} className="note-form">
-<input
-type="text"
-placeholder="Note Title"
-value={title}
-onChange={(e) => setTitle(e.target.value)} // Updates memory as you type
-/>
-<textarea
-placeholder="Write your note here..."
-value={content}
-onChange={(e) => setContent(e.target.value)} // Updates memory as you type
+  // Load notes from MongoDB
+  const fetchNotes = async () => {
+    try {
+      const response = await fetch(API_URL);
+      const data = await response.json();
+      setNotes(data);
+    } catch (error) {
+      console.error('Error fetching notes:', error);
+    }
+  };
 
-rows="4"
-/>
-<button type="submit">
-{editId !== null ? 'Update Note' : 'Add Note'}
-</button>
-</form>
-{/* Displaying the Notes (The 'READ' logic) */}
-<div className="notes-list">
-{notes.length === 0 ? (
-<p>No notes yet. Add one above!</p>
-) : (
-notes.map((note) => (
-<div key={note.id} className="note-card">
-<h3>{note.title}</h3>
-<p>{note.content}</p>
-<button onClick={() => handleEdit(note)}>Edit</button>
-<button onClick={() => handleDelete(note.id)}>Delete</button>
-</div>
-))
-)}
-</div>
-</div>
-);
+  useEffect(() => {
+    fetchNotes();
+  }, []);
+
+  // Add or update a note
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+
+    if (!title.trim() || !content.trim()) return;
+
+    try {
+      const url = editId
+        ? `${API_URL}/${editId}`
+        : API_URL;
+
+      const response = await fetch(url, {
+        method: editId ? 'PUT' : 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ title, content })
+      });
+
+      if (!response.ok) {
+        throw new Error('Could not save note');
+      }
+
+      setTitle('');
+      setContent('');
+      setEditId(null);
+      fetchNotes();
+    } catch (error) {
+      console.error('Error saving note:', error);
+    }
+  };
+
+  // Delete a note
+  const handleDelete = async (id) => {
+    try {
+      const response = await fetch(`${API_URL}/${id}`, {
+        method: 'DELETE'
+      });
+
+      if (!response.ok) {
+        throw new Error('Could not delete note');
+      }
+
+      fetchNotes();
+    } catch (error) {
+      console.error('Error deleting note:', error);
+    }
+  };
+
+  // Edit a note
+  const handleEdit = (note) => {
+    setEditId(note._id);
+    setTitle(note.title);
+    setContent(note.content);
+  };
+
+  return (
+    <div className="container">
+      <h1>My Notes App</h1>
+
+      <form onSubmit={handleSubmit} className="note-form">
+        <input
+          type="text"
+          placeholder="Note Title"
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+        />
+
+        <textarea
+          placeholder="Write your note here..."
+          value={content}
+          onChange={(e) => setContent(e.target.value)}
+          rows="4"
+        />
+
+        <button type="submit">
+          {editId ? 'Update Note' : 'Add Note'}
+        </button>
+      </form>
+
+      <div className="notes-list">
+        {notes.length === 0 ? (
+          <p>No notes yet. Add one above!</p>
+        ) : (
+          notes.map((note) => (
+            <div key={note._id} className="note-card">
+              <h3>{note.title}</h3>
+              <p>{note.content}</p>
+              <button onClick={() => handleEdit(note)}>Edit</button>
+              <button onClick={() => handleDelete(note._id)}>Delete</button>
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  );
 }
+
 export default App;
